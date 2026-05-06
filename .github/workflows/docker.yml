@@ -100,13 +100,14 @@ jobs:
       - name: Extract version from tag
         id: version
         run: |
-          if [[ "${{ github.ref }}" == refs/tags/mcp-v* ]]; then
+          if [[ "${GITHUB_REF}" == refs/tags/mcp-v* ]]; then
             VERSION="${GITHUB_REF#refs/tags/mcp-v}"
-            echo "version=${VERSION}" >> $GITHUB_OUTPUT
-            echo "major_minor=$(echo $VERSION | cut -d. -f1,2)" >> $GITHUB_OUTPUT
+            MAJOR_MINOR="$(printf '%s' "${VERSION}" | cut -d. -f1,2)"
+            echo "version=${VERSION}" >> "${GITHUB_OUTPUT}"
+            echo "major_minor=${MAJOR_MINOR}" >> "${GITHUB_OUTPUT}"
           else
-            echo "version=latest" >> $GITHUB_OUTPUT
-            echo "major_minor=latest" >> $GITHUB_OUTPUT
+            echo "version=latest" >> "${GITHUB_OUTPUT}"
+            echo "major_minor=latest" >> "${GITHUB_OUTPUT}"
           fi
 
       - name: Extract metadata

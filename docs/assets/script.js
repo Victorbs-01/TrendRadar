@@ -441,7 +441,7 @@ function _saveToStorage(content, storageKey, timeKey, label) {
             updateSaveTimeDisplay();
         }
     } catch (e) {
-        console.warn(`LocalStorage 保存 ${label} 失败:`, e);
+        console.warn('LocalStorage 保存失败:', label, e);
     }
 }
 
@@ -848,7 +848,7 @@ window.scrollToModuleInEditor = function(modKey) {
     // 如果没找到标题行，尝试查找模块键名（如 platforms:）
     if (targetLineIndex === -1) {
         for (let i = 0; i < lines.length; i++) {
-            if (lines[i].match(new RegExp(`^${modKey}:\\s*`))) {
+            if (lines[i].startsWith(`${modKey}:`)) {
                 targetLineIndex = i;
                 break;
             }
@@ -3220,9 +3220,10 @@ function updateStandaloneConfigInYaml(type, list) {
             // 检查是否离开 standalone (遇到缩进更少或相同的非注释行)
             const currentIndent = line.search(/\S/);
             // standalone 下一级的缩进
-            if (line.match(new RegExp(`^\\s*${type}:`))) {
+            const trimmedLine = line.trimStart();
+            if (trimmedLine.startsWith(`${type}:`)) {
                 targetLineIndex = i;
-                indent = line.substring(0, line.indexOf(type));
+                indent = line.slice(0, line.length - trimmedLine.length);
                 break;
             }
             // 如果遇到下一个模块，停止

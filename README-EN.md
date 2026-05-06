@@ -1380,7 +1380,7 @@ Method 1 discovered and suggested by **ziventian**, thanks to them. Default is p
    - Search `@BotFather` in Telegram (note case, has blue verification checkmark, shows ~37849827 monthly users, this is official, beware of fake accounts)
    - Send `/newbot` command to create new bot
    - Set bot name (must end with "bot", easily runs into duplicate names, so think creatively)
-   - Get Bot Token (format like: `123456789:AAHfiqksKZ8WmR2zSjiQ7_v4TMAKdiHm9T0`)
+   - Get Bot Token (placeholder example: `<TELEGRAM_BOT_TOKEN>`; never write a real token in docs)
 
 2. **Get Chat ID**:
 
@@ -1735,7 +1735,7 @@ Slack is a team collaboration tool, Incoming Webhooks can push messages to Slack
 1. **View Generated URL**:
    - In "Webhook URLs for Your Workspace" section
    - You'll see the newly generated Webhook URL
-   - Format: `https://hooks.slack.com/services/T00000000/B00000000/XXXXXXXXXXXXXXXXXXXXXXXX`
+   - Placeholder example: `<SLACK_WEBHOOK_URL>`; never store a real webhook URL in docs
 
 2. **Copy URL**:
    - Click **"Copy"** button on the right of URL

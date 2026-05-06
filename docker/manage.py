@@ -499,6 +499,20 @@ def _terminate_webserver_process(pid: int, require_expected: bool = True) -> boo
         return True
 
 
+def _probe_webserver_head() -> bool:
+    """Probe the fixed localhost web UI without constructing a dynamic URL."""
+    import http.client
+
+    conn = http.client.HTTPConnection("127.0.0.1", WEBSERVER_PORT, timeout=3)
+    try:
+        conn.request("HEAD", "/")
+        response = conn.getresponse()
+        response.read()
+        return 200 <= response.status < 400
+    finally:
+        conn.close()
+
+
 def _is_webserver_running(pid: int) -> bool:
     """检查 Web 服务器进程是否真正在运行。"""
     try:
@@ -510,17 +524,11 @@ def _is_webserver_running(pid: int) -> bool:
         return False
 
     try:
-        import urllib.request
-        req = urllib.request.Request(f"http://127.0.0.1:{WEBSERVER_PORT}/", method="HEAD")
-        urllib.request.urlopen(req, timeout=3)
-        return True
+        return _probe_webserver_head()
     except Exception:
         try:
             time.sleep(1)
-            import urllib.request
-            req = urllib.request.Request(f"http://127.0.0.1:{WEBSERVER_PORT}/", method="HEAD")
-            urllib.request.urlopen(req, timeout=3)
-            return True
+            return _probe_webserver_head()
         except Exception:
             return False
 

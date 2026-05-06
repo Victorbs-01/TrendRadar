@@ -1434,7 +1434,7 @@ ai_translation:
       - 在 Telegram 中搜索 `@BotFather`（大小写注意，有蓝色徽章勾勾，有类似 37849827 monthly users，这个才是官方的，有一些仿官方的账号注意辨别）
       - 发送 `/newbot` 命令创建新机器人
       - 设置机器人名称（必须以"bot"结尾，很容易遇到重复名字，所以你要绞尽脑汁想不同的名字）
-      - 获取 Bot Token（格式如：`123456789:AAHfiqksKZ8WmR2zSjiQ7_v4TMAKdiHm9T0`）
+      - 获取 Bot Token（占位符示例：`<TELEGRAM_BOT_TOKEN>`，不要写入真实 token）
 
    2. **获取 Chat ID**：
 
@@ -1789,7 +1789,7 @@ ai_translation:
    1. **查看生成的 URL**：
       - 在 "Webhook URLs for Your Workspace" 区域
       - 会看到刚刚生成的 Webhook URL
-      - 格式如：`https://hooks.slack.com/services/T00000000/B00000000/XXXXXXXXXXXXXXXXXXXXXXXX`
+      - 占位符示例：`<SLACK_WEBHOOK_URL>`，不要在文档中保存真实 Webhook URL
 
    2. **复制 URL**：
       - 点击 URL 右侧的 **"Copy"** 按钮
