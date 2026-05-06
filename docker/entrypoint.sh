@@ -7,12 +7,17 @@ if [ ! -f "/app/config/config.yaml" ] || [ ! -f "/app/config/frequency_words.txt
     exit 1
 fi
 
-case "${RUN_MODE:-cron}" in
+case "${RUN_MODE:-once}" in
 "once")
     echo "🔄 单次执行"
     exec python -m trendradar
     ;;
 "cron")
+    if [ ! -x "/usr/local/bin/supercronic" ]; then
+        echo "❌ cron mode is disabled in this candidate image; run with RUN_MODE=once or use an external scheduler"
+        exit 64
+    fi
+
     # 校验 CRON_SCHEDULE 格式（仅允许 cron 表达式合法字符）
     CRON_EXPR="${CRON_SCHEDULE:-*/30 * * * *}"
     if ! echo "$CRON_EXPR" | grep -qE '^[0-9*/,[:space:]-]+$'; then

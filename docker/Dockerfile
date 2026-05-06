@@ -1,57 +1,14 @@
-FROM python:3.12-slim-bookworm
+FROM python:3.12.13-slim-bookworm@sha256:d384a24aebd583543abb00fa47b2a434ec3a96559c6f244cc3cfcbe9e136a798
 
 WORKDIR /app
 
-# Latest releases available at https://github.com/aptible/supercronic/releases
-ARG TARGETARCH
-ENV SUPERCRONIC_VERSION=v0.2.39
+# Candidate/control-plane image: no bundled scheduler.
+# supercronic/cron is intentionally outside this image path until a separate
+# runtime scheduler phase is approved and scanned.
 
-RUN set -ex && \
-    apt-get update && \
-    apt-get install -y --no-install-recommends curl ca-certificates && \
-    case ${TARGETARCH} in \
-    amd64) \
-    export SUPERCRONIC_URL=https://github.com/aptible/supercronic/releases/download/${SUPERCRONIC_VERSION}/supercronic-linux-amd64; \
-    export SUPERCRONIC_SHA1SUM=c98bbf82c5f648aaac8708c182cc83046fe48423; \
-    export SUPERCRONIC=supercronic-linux-amd64; \
-    ;; \
-    arm64) \
-    export SUPERCRONIC_URL=https://github.com/aptible/supercronic/releases/download/${SUPERCRONIC_VERSION}/supercronic-linux-arm64; \
-    export SUPERCRONIC_SHA1SUM=5ef4ccc3d43f12d0f6c3763758bc37cc4e5af76e; \
-    export SUPERCRONIC=supercronic-linux-arm64; \
-    ;; \
-    *) \
-    echo "Unsupported architecture: ${TARGETARCH}"; \
-    exit 1; \
-    ;; \
-    esac && \
-    echo "Downloading supercronic for ${TARGETARCH} from ${SUPERCRONIC_URL}" && \
-    # 重试机制：最多3次，每次超时30秒
-    for i in 1 2 3; do \
-        echo "Download attempt $i/3"; \
-        if curl -fsSL --connect-timeout 30 --max-time 60 -o "$SUPERCRONIC" "$SUPERCRONIC_URL"; then \
-            echo "Download successful"; \
-            break; \
-        else \
-            echo "Download attempt $i failed"; \
-            if [ $i -eq 3 ]; then \
-                echo "All download attempts failed"; \
-                exit 1; \
-            fi; \
-            sleep 2; \
-        fi; \
-    done && \
-    echo "${SUPERCRONIC_SHA1SUM}  ${SUPERCRONIC}" | sha1sum -c - && \
-    chmod +x "$SUPERCRONIC" && \
-    mv "$SUPERCRONIC" "/usr/local/bin/${SUPERCRONIC}" && \
-    ln -s "/usr/local/bin/${SUPERCRONIC}" /usr/local/bin/supercronic && \
-    supercronic -version && \
-    apt-get remove -y curl && \
-    apt-get clean && \
-    rm -rf /var/lib/apt/lists/*
-
-# 从官方镜像拷贝 uv 二进制（CI/control-plane 禁止 latest）
-COPY --from=ghcr.io/astral-sh/uv:0.11.3 /uv /uvx /bin/
+# 从官方镜像拷贝 uv 二进制（CI/control-plane 禁止 latest；digest pinned）
+COPY --from=ghcr.io/astral-sh/uv:0.11.3@sha256:90bbb3c16635e9627f49eec6539f956d70746c409209041800a0280b93152823 /uv /uvx /bin/
+ENV UV_LINK_MODE=copy
 
 # 先安装依赖（利用 Docker 层缓存）
 COPY pyproject.toml uv.lock ./
@@ -62,20 +19,28 @@ RUN --mount=type=cache,target=/root/.cache/uv \
 COPY docker/manage.py .
 COPY trendradar/ ./trendradar/
 RUN --mount=type=cache,target=/root/.cache/uv \
-    uv sync --locked --no-dev
+    uv sync --locked --no-dev && \
+    rm -f /bin/uv /bin/uvx
 
 ENV PATH="/app/.venv/bin:$PATH"
 
-# 复制 entrypoint.sh 并强制转换为 LF 格式
+# 复制 entrypoint.sh 并强制转换为 LF 格式；最后降权运行
 COPY docker/entrypoint.sh /entrypoint.sh.tmp
 RUN sed -i 's/\r$//' /entrypoint.sh.tmp && \
     mv /entrypoint.sh.tmp /entrypoint.sh && \
-    chmod +x /entrypoint.sh && \
+    chmod 0555 /entrypoint.sh && \
     chmod +x manage.py && \
-    mkdir -p /app/config /app/output
+    mkdir -p /app/config /app/output && \
+    groupadd --system --gid 10001 trendradar && \
+    useradd --system --uid 10001 --gid trendradar --home-dir /app --shell /usr/sbin/nologin trendradar && \
+    chown -R trendradar:trendradar /app
 
 ENV PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
     CONFIG_PATH=/app/config/config.yaml \
-    FREQUENCY_WORDS_PATH=/app/config/frequency_words.txt
+    FREQUENCY_WORDS_PATH=/app/config/frequency_words.txt \
+    RUN_MODE=once
+
+USER trendradar
 
 ENTRYPOINT ["/entrypoint.sh"]
