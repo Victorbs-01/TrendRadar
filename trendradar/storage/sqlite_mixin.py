@@ -50,6 +50,20 @@ class SQLiteStorageMixin:
         """格式化时间文件名 (格式: HH-MM)"""
         pass
 
+    @staticmethod
+    def _load_trendradar_temp_query_values(cursor: sqlite3.Cursor, values: List[Any]) -> None:
+        """Load values into a connection-local temp table for static IN queries."""
+        cursor.execute("""
+            CREATE TEMP TABLE IF NOT EXISTS trendradar_temp_query_values (
+                value
+            )
+        """)
+        cursor.execute("DELETE FROM trendradar_temp_query_values")
+        cursor.executemany(
+            "INSERT INTO trendradar_temp_query_values (value) VALUES (?)",
+            [(value,) for value in values]
+        )
+
     # ========================================
     # Schema 管理
     # ========================================
@@ -377,15 +391,15 @@ class SQLiteStorageMixin:
             rank_history_map: Dict[int, List[int]] = {}
             rank_timeline_map: Dict[int, List[Dict[str, Any]]] = {}
             if news_ids:
-                placeholders = ",".join("?" * len(news_ids))
-                cursor.execute(f"""
+                self._load_trendradar_temp_query_values(cursor, news_ids)
+                cursor.execute("""
                     SELECT rh.news_item_id, rh.rank, rh.crawl_time
                     FROM rank_history rh
                     JOIN news_items ni ON rh.news_item_id = ni.id
-                    WHERE rh.news_item_id IN ({placeholders})
+                    WHERE rh.news_item_id IN (SELECT value FROM trendradar_temp_query_values)
                       AND NOT (rh.rank = 0 AND rh.crawl_time > ni.last_crawl_time)
                     ORDER BY rh.news_item_id, rh.crawl_time
-                """, news_ids)
+                """)
                 for rh_row in cursor.fetchall():
                     news_id, rank, crawl_time = rh_row[0], rh_row[1], rh_row[2]
 
@@ -523,15 +537,15 @@ class SQLiteStorageMixin:
             rank_history_map: Dict[int, List[int]] = {}
             rank_timeline_map: Dict[int, List[Dict[str, Any]]] = {}
             if news_ids:
-                placeholders = ",".join("?" * len(news_ids))
-                cursor.execute(f"""
+                self._load_trendradar_temp_query_values(cursor, news_ids)
+                cursor.execute("""
                     SELECT rh.news_item_id, rh.rank, rh.crawl_time
                     FROM rank_history rh
                     JOIN news_items ni ON rh.news_item_id = ni.id
-                    WHERE rh.news_item_id IN ({placeholders})
+                    WHERE rh.news_item_id IN (SELECT value FROM trendradar_temp_query_values)
                       AND NOT (rh.rank = 0 AND rh.crawl_time > ni.last_crawl_time)
                     ORDER BY rh.news_item_id, rh.crawl_time
-                """, news_ids)
+                """)
                 for rh_row in cursor.fetchall():
                     news_id, rank, crawl_time = rh_row[0], rh_row[1], rh_row[2]
 
@@ -1256,21 +1270,20 @@ class SQLiteStorageMixin:
                 return 0
 
             # 废弃标签
-            placeholders = ",".join("?" * len(tag_ids))
-            cursor.execute(f"""
+            self._load_trendradar_temp_query_values(cursor, tag_ids)
+            cursor.execute("""
                 UPDATE ai_filter_tags
                 SET status = 'deprecated', deprecated_at = ?
-                WHERE id IN ({placeholders})
-            """, [now_str] + tag_ids)
+                WHERE id IN (SELECT value FROM trendradar_temp_query_values)
+            """, (now_str,))
             tag_count = cursor.rowcount
 
             # 废弃关联的分类结果
-            placeholders = ",".join("?" * len(tag_ids))
-            cursor.execute(f"""
+            cursor.execute("""
                 UPDATE ai_filter_results
                 SET status = 'deprecated', deprecated_at = ?
-                WHERE tag_id IN ({placeholders}) AND status = 'active'
-            """, [now_str] + tag_ids)
+                WHERE tag_id IN (SELECT value FROM trendradar_temp_query_values) AND status = 'active'
+            """, (now_str,))
 
             conn.commit()
             print(f"[AI筛选] 已废弃 {tag_count} 个标签及关联分类结果")
@@ -1328,20 +1341,20 @@ class SQLiteStorageMixin:
             cursor = conn.cursor()
             now_str = self._get_configured_time().strftime("%Y-%m-%d %H:%M:%S")
 
-            placeholders = ",".join("?" * len(tag_ids))
+            self._load_trendradar_temp_query_values(cursor, tag_ids)
 
-            cursor.execute(f"""
+            cursor.execute("""
                 UPDATE ai_filter_tags
                 SET status = 'deprecated', deprecated_at = ?
-                WHERE id IN ({placeholders})
-            """, [now_str] + tag_ids)
+                WHERE id IN (SELECT value FROM trendradar_temp_query_values)
+            """, (now_str,))
             tag_count = cursor.rowcount
 
-            cursor.execute(f"""
+            cursor.execute("""
                 UPDATE ai_filter_results
                 SET status = 'deprecated', deprecated_at = ?
-                WHERE tag_id IN ({placeholders}) AND status = 'active'
-            """, [now_str] + tag_ids)
+                WHERE tag_id IN (SELECT value FROM trendradar_temp_query_values) AND status = 'active'
+            """, (now_str,))
 
             conn.commit()
             return tag_count
@@ -1609,11 +1622,11 @@ class SQLiteStorageMixin:
             ranks_map: Dict[int, List[int]] = {}
             if hotlist_news_ids:
                 unique_ids = list(set(hotlist_news_ids))
-                placeholders = ",".join("?" * len(unique_ids))
-                cursor.execute(f"""
+                self._load_trendradar_temp_query_values(cursor, unique_ids)
+                cursor.execute("""
                     SELECT news_item_id, rank FROM rank_history
-                    WHERE news_item_id IN ({placeholders}) AND rank != 0
-                """, unique_ids)
+                    WHERE news_item_id IN (SELECT value FROM trendradar_temp_query_values) AND rank != 0
+                """)
                 for rh_row in cursor.fetchall():
                     nid, rank = rh_row[0], rh_row[1]
                     if nid not in ranks_map:
@@ -1643,14 +1656,14 @@ class SQLiteStorageMixin:
                 rss_filter_rows = cursor.fetchall()
                 if rss_filter_rows:
                     rss_ids = [row[0] for row in rss_filter_rows]
-                    placeholders = ",".join("?" * len(rss_ids))
-                    rss_cursor.execute(f"""
+                    self._load_trendradar_temp_query_values(rss_cursor, rss_ids)
+                    rss_cursor.execute("""
                         SELECT i.id, i.title, i.feed_id, f.name as feed_name,
                                i.url, i.published_at
                         FROM rss_items i
                         LEFT JOIN rss_feeds f ON i.feed_id = f.id
-                        WHERE i.id IN ({placeholders})
-                    """, rss_ids)
+                        WHERE i.id IN (SELECT value FROM trendradar_temp_query_values)
+                    """)
 
                     rss_info = {row[0]: row for row in rss_cursor.fetchall()}
 

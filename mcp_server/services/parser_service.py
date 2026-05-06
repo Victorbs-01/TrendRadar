@@ -46,6 +46,20 @@ class ParserService:
         title = title.strip()
         return title
 
+    @staticmethod
+    def _load_trendradar_temp_query_values(cursor, values: List) -> None:
+        """Load values into a connection-local temp table for static IN queries."""
+        cursor.execute("""
+            CREATE TEMP TABLE IF NOT EXISTS trendradar_temp_query_values (
+                value
+            )
+        """)
+        cursor.execute("DELETE FROM trendradar_temp_query_values")
+        cursor.executemany(
+            "INSERT INTO trendradar_temp_query_values (value) VALUES (?)",
+            [(value,) for value in values]
+        )
+
     def get_date_folder_name(self, date: datetime = None) -> str:
         """
         获取日期字符串（ISO 格式）
@@ -140,16 +154,15 @@ class ParserService:
 
         # 构建查询
         if platform_ids:
-            placeholders = ','.join(['?' for _ in platform_ids])
-            query = f"""
+            self._load_trendradar_temp_query_values(cursor, platform_ids)
+            cursor.execute("""
                 SELECT n.id, n.platform_id, p.name as platform_name, n.title,
                        n.rank, n.url, n.mobile_url,
                        n.first_crawl_time, n.last_crawl_time, n.crawl_count
                 FROM news_items n
                 LEFT JOIN platforms p ON n.platform_id = p.id
-                WHERE n.platform_id IN ({placeholders})
-            """
-            cursor.execute(query, platform_ids)
+                WHERE n.platform_id IN (SELECT value FROM trendradar_temp_query_values)
+            """)
         else:
             cursor.execute("""
                 SELECT n.id, n.platform_id, p.name as platform_name, n.title,
@@ -166,12 +179,12 @@ class ParserService:
         rank_history_map = {}
 
         if news_ids:
-            placeholders = ",".join("?" * len(news_ids))
-            cursor.execute(f"""
+            self._load_trendradar_temp_query_values(cursor, news_ids)
+            cursor.execute("""
                 SELECT news_item_id, rank FROM rank_history
-                WHERE news_item_id IN ({placeholders})
+                WHERE news_item_id IN (SELECT value FROM trendradar_temp_query_values)
                 ORDER BY news_item_id, crawl_time
-            """, news_ids)
+            """)
 
             for rh_row in cursor.fetchall():
                 news_id = rh_row['news_item_id']
@@ -241,17 +254,16 @@ class ParserService:
 
         # 构建查询
         if feed_ids:
-            placeholders = ','.join(['?' for _ in feed_ids])
-            query = f"""
+            self._load_trendradar_temp_query_values(cursor, feed_ids)
+            cursor.execute("""
                 SELECT i.id, i.feed_id, f.name as feed_name, i.title,
                        i.url, i.published_at, i.summary, i.author,
                        i.first_crawl_time, i.last_crawl_time, i.crawl_count
                 FROM rss_items i
                 LEFT JOIN rss_feeds f ON i.feed_id = f.id
-                WHERE i.feed_id IN ({placeholders})
+                WHERE i.feed_id IN (SELECT value FROM trendradar_temp_query_values)
                 ORDER BY i.published_at DESC
-            """
-            cursor.execute(query, feed_ids)
+            """)
         else:
             cursor.execute("""
                 SELECT i.id, i.feed_id, f.name as feed_name, i.title,
